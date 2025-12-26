@@ -1,6 +1,3 @@
-# putback
-
-```go
 package main
 
 import (
@@ -12,6 +9,7 @@ import (
 )
 
 func main() {
+	// echo "WORLD" | nc -c 127.0.0.1 3333
 	l, err := net.Listen("tcp4", "127.0.0.1:3333")
 	if err != nil {
 		panic(err)
@@ -30,4 +28,3 @@ func main() {
 		fmt.Println(string(b))
 	}
 }
-```
