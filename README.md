@@ -1,7 +1,9 @@
 # putback
 
-[![asciicast](https://asciinema.org/a/764258.svg)](https://asciinema.org/a/764258)
+[Split example:](https://github.com/asciimoth/putback/tree/master/examples/split)  
+[![asciicast](https://asciinema.org/a/764258.svg)](https://asciinema.org/a/764258)  
 
+Minimal [hello X](https://github.com/asciimoth/putback/tree/master/examples/hello/hello.go) example:
 ```go
 package main
 
@@ -14,6 +16,7 @@ import (
 )
 
 func main() {
+	// echo "WORLD" | nc -c 127.0.0.1 3333
 	l, err := net.Listen("tcp4", "127.0.0.1:3333")
 	if err != nil {
 		panic(err)
