@@ -109,8 +109,8 @@ func (pb *PutBackTCPConn) Read(p []byte) (n int, err error) {
 	return readJoin(&pb.Buffer, pb.TCPConn, p)
 }
 
-func (pb *PutBackConn) WriteTo(w io.Writer) (int64, error) {
-	return io.Copy(w, pb)
+func (pb *PutBackTCPConn) WriteTo(w io.Writer) (int64, error) {
+	return copyBuffer(w, pb)
 }
 
 type PutBackPacketConn struct {

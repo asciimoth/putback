@@ -45,3 +45,45 @@ func udpAddrToAddrPort(a *net.UDPAddr) netip.AddrPort {
 	na = na.WithZone(a.Zone) // keep IPv6 zone if present
 	return netip.AddrPortFrom(na, uint16(a.Port))
 }
+
+// copyBuffer is like io.Copy but
+// without specific logic for io.WriteTo and io.ReadFrom
+func copyBuffer(dst io.Writer, src io.Reader) (written int64, err error) {
+	size := 32 * 1024
+	if l, ok := src.(*io.LimitedReader); ok && int64(size) > l.N {
+		if l.N < 1 {
+			size = 1
+		} else {
+			size = int(l.N)
+		}
+	}
+	buf := make([]byte, size)
+	for {
+		nr, er := src.Read(buf)
+		if nr > 0 {
+			nw, ew := dst.Write(buf[0:nr])
+			if nw < 0 || nr < nw {
+				nw = 0
+				if ew == nil {
+					ew = io.ErrNoProgress
+				}
+			}
+			written += int64(nw)
+			if ew != nil {
+				err = ew
+				break
+			}
+			if nr != nw {
+				err = io.ErrShortWrite
+				break
+			}
+		}
+		if er != nil {
+			if er != io.EOF {
+				err = er
+			}
+			break
+		}
+	}
+	return written, err
+}
