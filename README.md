@@ -1,4 +1,5 @@
 # putback
+A minimal library with wrappers for common I/O interfaces, adding the ability to return read bytes back to the stream for subsequent reading.
 
 [Split example:](https://github.com/asciimoth/putback/tree/master/examples/split)  
 [![asciicast](https://asciinema.org/a/764258.svg)](https://asciinema.org/a/764258)  
