@@ -1,5 +1,7 @@
 # putback
 
+[![asciicast](https://asciinema.org/a/764258.svg)](https://asciinema.org/a/764258)
+
 ```go
 package main
 
