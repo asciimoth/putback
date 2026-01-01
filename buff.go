@@ -198,6 +198,9 @@ func NewBackBuffer(pool BufferPool, parent WithBackBufer, bufs ...[]byte) BackBu
 	var bytes []byte
 	if parent != nil {
 		bytes = concatCopy(parent.BackBuffer().Bytes, bytes)
+		if pool == nil {
+			pool = parent.BackBuffer().Pool
+		}
 	}
 	for _, b := range bufs {
 		bytes = concatCopy(b, bytes)
@@ -212,6 +215,9 @@ func NewBackPacketBuffer[T any](pool BufferPool, parent WithBackPacketBufer[T], 
 	var packs []Packet[T]
 	if parent != nil {
 		packs = concatCopy(parent.BackPacketBuffer().Packets, packs)
+		if pool == nil {
+			pool = parent.BackPacketBuffer().Pool
+		}
 	}
 	packs = concatCopy(packets, packs)
 	return BackPacketBuffer[T]{
