@@ -6,6 +6,16 @@ import (
 	"net/netip"
 )
 
+func concatCopy[T any](a, b []T) []T {
+	if a == nil && b == nil {
+		return nil
+	}
+	c := make([]T, len(a)+len(b))
+	copy(c, a)
+	copy(c[len(a):], b)
+	return c
+}
+
 func readJoin(a, b io.Reader, p []byte) (n int, err error) {
 	if a != nil {
 		n, err = a.Read(p)

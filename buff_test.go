@@ -16,7 +16,7 @@ func (m *mockPool) GetBuffer(length int) []byte {
 func (m *mockPool) PutBuffer(buf []byte) {}
 
 func TestBufferPool_PutBackAndRead_Simple(t *testing.T) {
-	b := &putback.BackBuffer{}
+	b := putback.NewBackBuffer(nil, nil)
 	b.PutBack([]byte("world"))
 	b.PutBack([]byte("hello "))
 
@@ -39,7 +39,7 @@ func TestBufferPool_PutBackAndRead_Simple(t *testing.T) {
 }
 
 func TestBufferPool_PartialReads(t *testing.T) {
-	b := &putback.BackBuffer{}
+	b := putback.NewBackBuffer(nil, nil)
 	src := []byte("abcdef")
 	b.PutBack(src)
 
@@ -64,7 +64,7 @@ func TestBufferPool_PartialReads(t *testing.T) {
 func TestBufferPool_PushBackWithFreeSpace(t *testing.T) {
 	// Simulate buffer with free space on left by creating Bytes with a
 	// prefix of zeros and setting Pointer > 0.
-	b := &putback.BackBuffer{}
+	b := putback.NewBackBuffer(nil, nil)
 	b.Bytes = append(make([]byte, 5), []byte("DATA")...)
 	b.Pointer = 5
 

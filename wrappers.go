@@ -187,10 +187,11 @@ func (pb *PutBackUDPConn) Read(p []byte) (n int, err error) {
 }
 
 func WrapConn(conn net.Conn, bytes []byte, pool BufferPool) net.Conn {
-	buf := BackBuffer{
-		Bytes: bytes,
-		Pool:  pool,
+	var parent WithBackBufer
+	if p, ok := conn.(WithBackBufer); ok {
+		parent = p
 	}
+	buf := NewBackBuffer(pool, parent, bytes)
 	if tcp, ok := conn.(TCPConn); ok {
 		return &PutBackTCPConn{
 			TCPConn: tcp,

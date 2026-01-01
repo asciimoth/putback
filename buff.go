@@ -1,9 +1,19 @@
 package putback
 
+// Static type assertion
+var (
+	_ WithBackBufer            = &BackBuffer{}
+	_ WithBackPacketBufer[any] = &BackPacketBuffer[any]{}
+)
+
 type BackBuffer struct {
 	Bytes   []byte // May be nil
 	Pointer int
 	Pool    BufferPool // May be nil
+}
+
+func (b *BackBuffer) BackBuffer() *BackBuffer {
+	return b
 }
 
 func (b *BackBuffer) Wipe() {
@@ -170,4 +180,42 @@ func (b *BackPacketBuffer[T]) ReadFrom(p []byte) (n int, assoc T, err error) {
 		b.Pool.PutBuffer(packet.Buffer)
 	}
 	return
+}
+
+func (b *BackPacketBuffer[T]) BackPacketBuffer() *BackPacketBuffer[T] {
+	return b
+}
+
+type WithBackBufer interface {
+	BackBuffer() *BackBuffer
+}
+
+type WithBackPacketBufer[T any] interface {
+	BackPacketBuffer() *BackPacketBuffer[T]
+}
+
+func NewBackBuffer(pool BufferPool, parent WithBackBufer, bufs ...[]byte) BackBuffer {
+	var bytes []byte
+	if parent != nil {
+		bytes = concatCopy(parent.BackBuffer().Bytes, bytes)
+	}
+	for _, b := range bufs {
+		bytes = concatCopy(b, bytes)
+	}
+	return BackBuffer{
+		Bytes: bytes,
+		Pool:  pool,
+	}
+}
+
+func NewBackPacketBuffer[T any](pool BufferPool, parent WithBackPacketBufer[T], packets ...Packet[T]) BackPacketBuffer[T] {
+	var packs []Packet[T]
+	if parent != nil {
+		packs = concatCopy(parent.BackPacketBuffer().Packets, packs)
+	}
+	packs = concatCopy(packets, packs)
+	return BackPacketBuffer[T]{
+		Packets: packs,
+		Pool:    pool,
+	}
 }
