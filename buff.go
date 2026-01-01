@@ -2,20 +2,25 @@ package putback
 
 // Static type assertion
 var (
-	_ WithBackBufer            = &BackBuffer{}
-	_ WithBackPacketBufer[any] = &BackPacketBuffer[any]{}
+	_ WithBackBuffer            = &BackBuffer{}
+	_ WithBackPacketBuffer[any] = &BackPacketBuffer[any]{}
 )
 
+// BackBuffer holds a byte slice that may be read from and to which bytes can
+// be "put back" (prepended) so they will be returned by subsequent reads.
 type BackBuffer struct {
 	Bytes   []byte // May be nil
 	Pointer int
 	Pool    BufferPool // May be nil
 }
 
+// BackBuffer returns the receiver to satisfy the WithBackBuffer interface.
 func (b *BackBuffer) BackBuffer() *BackBuffer {
 	return b
 }
 
+// Wipe clears the buffer state. If a BufferPool is present, the backing
+// slice is returned to the pool. Wipe is safe to call on a nil receiver.
 func (b *BackBuffer) Wipe() {
 	if b == nil {
 		return
@@ -28,6 +33,9 @@ func (b *BackBuffer) Wipe() {
 	}
 }
 
+// BytesLeft returns the number of unread bytes remaining in the buffer. If
+// the receiver or its backing slice is nil, BytesLeft returns 0. The method
+// defensively clamps Pointer to the valid range.
 func (b *BackBuffer) BytesLeft() int {
 	if b == nil || b.Bytes == nil {
 		return 0
@@ -43,6 +51,12 @@ func (b *BackBuffer) BytesLeft() int {
 	return len(b.Bytes) - b.Pointer
 }
 
+// PutBack prepends the provided bytes so they will be returned by subsequent
+// Read calls. If there is sufficient unused space to the left of the current
+// Pointer the bytes are copied into that space. Otherwise a new backing
+// buffer is allocated (or obtained from Pool) and the existing unread bytes
+// are appended after the new data. If the pool is used the old backing slice
+// is returned to the pool.
 func (b *BackBuffer) PutBack(bytes []byte) {
 	if len(bytes) == 0 {
 		return
@@ -93,7 +107,10 @@ func (b *BackBuffer) PutBack(bytes []byte) {
 	b.Pointer = 0
 }
 
-// Never returns error
+// Read reads up to len(p) bytes from the unread portion of the buffer into p
+// and advances the read position. Read never returns an error
+// and is safe to call on a nil receiver. When all data is consumed
+// the backing buffer is released to the Pool if present.
 func (b *BackBuffer) Read(p []byte) (n int, err error) {
 	if b == nil || b.Bytes == nil || len(b.Bytes) == 0 {
 		return 0, nil
@@ -124,16 +141,23 @@ func (b *BackBuffer) Read(p []byte) (n int, err error) {
 	return toCopy, nil
 }
 
+// Packet holds a single buffer and an associated value of type T. It is used
+// by BackPacketBuffer to store packets that can be put back and read later.
 type Packet[T any] struct {
 	Buffer []byte
 	Assoc  T
 }
 
+// BackPacketBuffer stores a stack of packets that can be pushed back and later
+// read in LIFO order. If a BufferPool is present, packet buffers are returned
+// to the pool when the packet is discarded.
 type BackPacketBuffer[T any] struct {
 	Packets []Packet[T] // May be nil
 	Pool    BufferPool  // May be nil
 }
 
+// Wipe clears stored packets and returns their buffers to the pool when
+// available. Wipe is safe to call on a nil receiver.
 func (b *BackPacketBuffer[T]) Wipe() {
 	if b == nil {
 		return
@@ -146,6 +170,7 @@ func (b *BackPacketBuffer[T]) Wipe() {
 	b.Packets = nil
 }
 
+// PacketsLeft returns the number of packets currently stored in the buffer.
 func (b *BackPacketBuffer[T]) PacketsLeft() int {
 	if b == nil {
 		return 0
@@ -153,6 +178,9 @@ func (b *BackPacketBuffer[T]) PacketsLeft() int {
 	return len(b.Packets)
 }
 
+// PutBack pushes a packet (buffer + associated value) onto the stack. The
+// provided buffer slice is not copied; callers that need ownership should
+// ensure the slice won't be modified after PutBack.
 func (b *BackPacketBuffer[T]) PutBack(bytes []byte, Assoc T) {
 	if b == nil {
 		return
@@ -163,7 +191,11 @@ func (b *BackPacketBuffer[T]) PutBack(bytes []byte, Assoc T) {
 	})
 }
 
-// Never returns error
+// ReadFrom pops the most recently PutBack packet and copies its buffer into
+// p (up to len(p)). It returns the number of bytes copied and the associated
+// value. If no packets are available it returns zero values. When a pool is
+// present the packet buffer is returned to the pool. ReadFrom never returns
+// a non-nil error.
 func (b *BackPacketBuffer[T]) ReadFrom(p []byte) (n int, assoc T, err error) {
 	if b == nil {
 		return
@@ -182,19 +214,24 @@ func (b *BackPacketBuffer[T]) ReadFrom(p []byte) (n int, assoc T, err error) {
 	return
 }
 
+// BackPacketBuffer returns the receiver to satisfy the WithBackPacketBuffer[T] interface.
 func (b *BackPacketBuffer[T]) BackPacketBuffer() *BackPacketBuffer[T] {
 	return b
 }
 
-type WithBackBufer interface {
+type WithBackBuffer interface {
 	BackBuffer() *BackBuffer
 }
 
-type WithBackPacketBufer[T any] interface {
+type WithBackPacketBuffer[T any] interface {
 	BackPacketBuffer() *BackPacketBuffer[T]
 }
 
-func NewBackBuffer(pool BufferPool, parent WithBackBufer, bufs ...[]byte) BackBuffer {
+// NewBackBuffer constructs a BackBuffer optionally reusing data from parent
+// and prepending any provided bufs in front of that data. The returned
+// BackBuffer does not take ownership of a non-nil parent; it copies slices as
+// necessary.
+func NewBackBuffer(pool BufferPool, parent WithBackBuffer, bufs ...[]byte) BackBuffer {
 	var bytes []byte
 	if parent != nil {
 		bytes = concatCopy(parent.BackBuffer().Bytes, bytes)
@@ -211,7 +248,9 @@ func NewBackBuffer(pool BufferPool, parent WithBackBufer, bufs ...[]byte) BackBu
 	}
 }
 
-func NewBackPacketBuffer[T any](pool BufferPool, parent WithBackPacketBufer[T], packets ...Packet[T]) BackPacketBuffer[T] {
+// NewBackPacketBuffer constructs a BackPacketBuffer optionally reusing
+// packets from parent and appending the provided packets. The returned
+func NewBackPacketBuffer[T any](pool BufferPool, parent WithBackPacketBuffer[T], packets ...Packet[T]) BackPacketBuffer[T] {
 	var packs []Packet[T]
 	if parent != nil {
 		packs = concatCopy(parent.BackPacketBuffer().Packets, packs)
