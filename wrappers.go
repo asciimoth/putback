@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"github.com/asciimoth/bufpool"
 )
 
 // PutBackReader wraps an io.Reader and allows bytes to be put back so they
@@ -250,7 +251,7 @@ func (pb *PutBackUDPConn) Read(p []byte) (n int, err error) {
 // the provided connection already supports put-back, its existing buffer is
 // reused as the parent. TCP connections are wrapped with PutBackTCPConn to
 // preserve TCP-specific methods.
-func WrapConn(conn net.Conn, bytes []byte, pool BufferPool) net.Conn {
+func WrapConn(conn net.Conn, bytes []byte, pool bufpool.Pool) net.Conn {
 	var parent WithBackBuffer
 	if p, ok := conn.(WithBackBuffer); ok {
 		parent = p

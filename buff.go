@@ -1,5 +1,9 @@
 package putback
 
+import (
+	"github.com/asciimoth/bufpool"
+)
+
 // Static type assertion
 var (
 	_ WithBackBuffer            = &BackBuffer{}
@@ -11,7 +15,7 @@ var (
 type BackBuffer struct {
 	Bytes   []byte // May be nil
 	Pointer int
-	Pool    BufferPool // May be nil
+	Pool    bufpool.Pool // May be nil
 }
 
 // BackBuffer returns the receiver to satisfy the WithBackBuffer interface.
@@ -29,7 +33,7 @@ func (b *BackBuffer) Wipe() {
 	if b.Pool != nil {
 		bytes := b.Bytes
 		b.Bytes = nil
-		b.Pool.PutBuffer(bytes)
+		bufpool.PutBuffer(b.Pool, bytes)
 	}
 }
 
@@ -66,7 +70,7 @@ func (b *BackBuffer) PutBack(bytes []byte) {
 	if b.Bytes == nil {
 		b.Pointer = 0
 		if b.Pool != nil {
-			b.Bytes = b.Pool.GetBuffer(len(bytes))
+			b.Bytes = bufpool.GetBuffer(b.Pool, len(bytes))
 			copy(b.Bytes, bytes)
 			return
 		}
@@ -89,7 +93,7 @@ func (b *BackBuffer) PutBack(bytes []byte) {
 	newLen := len(bytes) + len(existing)
 	var newBuf []byte
 	if b.Pool != nil {
-		newBuf = b.Pool.GetBuffer(newLen)
+		newBuf = bufpool.GetBuffer(b.Pool, newLen)
 	} else {
 		newBuf = make([]byte, newLen)
 	}
@@ -100,7 +104,7 @@ func (b *BackBuffer) PutBack(bytes []byte) {
 	// return old backing buffer to pool if present
 	if b.Pool != nil {
 		// give the whole slice back
-		b.Pool.PutBuffer(b.Bytes)
+		bufpool.PutBuffer(b.Pool, b.Bytes)
 	}
 
 	b.Bytes = newBuf
@@ -133,7 +137,7 @@ func (b *BackBuffer) Read(p []byte) (n int, err error) {
 	if b.Pointer >= len(b.Bytes) {
 		// consumed all data -> free backing buffer if possible
 		if b.Pool != nil {
-			b.Pool.PutBuffer(b.Bytes)
+			bufpool.PutBuffer(b.Pool, b.Bytes)
 		}
 		b.Bytes = nil
 		b.Pointer = 0
@@ -153,7 +157,7 @@ type Packet[T any] struct {
 // to the pool when the packet is discarded.
 type BackPacketBuffer[T any] struct {
 	Packets []Packet[T] // May be nil
-	Pool    BufferPool  // May be nil
+	Pool    bufpool.Pool  // May be nil
 }
 
 // Wipe clears stored packets and returns their buffers to the pool when
@@ -164,7 +168,7 @@ func (b *BackPacketBuffer[T]) Wipe() {
 	}
 	if b.Pool != nil {
 		for _, packet := range b.Packets {
-			b.Pool.PutBuffer(packet.Buffer)
+			bufpool.PutBuffer(b.Pool, packet.Buffer)
 		}
 	}
 	b.Packets = nil
@@ -209,7 +213,7 @@ func (b *BackPacketBuffer[T]) ReadFrom(p []byte) (n int, assoc T, err error) {
 	n = copy(p, packet.Buffer)
 	assoc = packet.Assoc
 	if b.Pool != nil {
-		b.Pool.PutBuffer(packet.Buffer)
+		bufpool.PutBuffer(b.Pool, packet.Buffer)
 	}
 	return
 }
@@ -231,7 +235,7 @@ type WithBackPacketBuffer[T any] interface {
 // and prepending any provided bufs in front of that data. The returned
 // BackBuffer does not take ownership of a non-nil parent; it copies slices as
 // necessary.
-func NewBackBuffer(pool BufferPool, parent WithBackBuffer, bufs ...[]byte) BackBuffer {
+func NewBackBuffer(pool bufpool.Pool, parent WithBackBuffer, bufs ...[]byte) BackBuffer {
 	var bytes []byte
 	if parent != nil {
 		bytes = concatCopy(parent.BackBuffer().Bytes, bytes)
@@ -250,7 +254,7 @@ func NewBackBuffer(pool BufferPool, parent WithBackBuffer, bufs ...[]byte) BackB
 
 // NewBackPacketBuffer constructs a BackPacketBuffer optionally reusing
 // packets from parent and appending the provided packets. The returned
-func NewBackPacketBuffer[T any](pool BufferPool, parent WithBackPacketBuffer[T], packets ...Packet[T]) BackPacketBuffer[T] {
+func NewBackPacketBuffer[T any](pool bufpool.Pool, parent WithBackPacketBuffer[T], packets ...Packet[T]) BackPacketBuffer[T] {
 	var packs []Packet[T]
 	if parent != nil {
 		packs = concatCopy(parent.BackPacketBuffer().Packets, packs)
